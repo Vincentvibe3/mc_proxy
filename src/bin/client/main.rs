@@ -110,7 +110,7 @@ async fn forwarding_handler(mut from_server: OwnedReadHalf, mut to_proxy: OwnedW
 
 async fn create_tunnel(uuid:Uuid){
 	let (read, write) = create_new_connection("127.0.0.1:".to_owned()+MC_PORT).await;
-	let (mut tunnel_read, mut tunnel_write) = create_new_connection("127.0.0.1:".to_owned()+TUNNEL_PORT).await;
+	let (mut tunnel_read, mut tunnel_write) = create_new_connection("proxy.mcproxy.vincentvibe3.com:".to_owned()+TUNNEL_PORT).await;
 	let mut data = BytesMut::new();
 	loop {
 		tunnel_read.readable().await.unwrap();

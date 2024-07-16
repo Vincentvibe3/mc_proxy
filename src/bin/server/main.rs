@@ -195,7 +195,7 @@ async fn setup_tunnel_connection(
 							println!("got client packet");
 							if packet.id == 0 {
 								println!("Broadcast channel set");
-								let external_hostname = String::from_str("mcsrv.local").unwrap();
+								let external_hostname = String::from_str("random.mcproxy.vincentvibe3.com").unwrap();
 								let external_hostname_bytes = external_hostname.as_bytes();
 								let mut clients_locked = clients.write().await;
 								clients_locked.insert(external_hostname.clone(), writer.clone());
