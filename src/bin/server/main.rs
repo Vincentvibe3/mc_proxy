@@ -14,7 +14,7 @@ async fn handle_client_connection(
 	println!("client read started");
 	loop {
 		// tokio::time::sleep(Duration::from_millis(1)).await;
-		// println!("loop 2");
+		println!("loop 2");
 		let read_ready = from_client.ready(Interest::READABLE);
 		let write_ready = to_proxy.ready(Interest::WRITABLE);
 		tokio::select! {
@@ -122,7 +122,7 @@ async fn handle_tunnel_connection(
 	println!("forwarding started");
 	loop {
 		// tokio::time::sleep(Duration::from_millis(1)).await;
-		// println!("loop");
+		println!("loop");
 		let read_ready = read.ready(Interest::READABLE);
 		let write_ready = forwarding_writer.ready(Interest::WRITABLE);
 		tokio::select! {
