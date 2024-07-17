@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
 use bytes::{Buf, BytesMut};
 use mc_proxy_lib::packet::{create_packet, get_packet, read_string, read_varint};
@@ -13,6 +13,8 @@ async fn handle_client_connection(
 ){
 	println!("client read started");
 	loop {
+		tokio::time::sleep(Duration::from_millis(1)).await;
+		println!("loop 2");
 		let read_ready = from_client.ready(Interest::READABLE);
 		let write_ready = to_proxy.ready(Interest::WRITABLE);
 		tokio::select! {
@@ -119,6 +121,8 @@ async fn handle_tunnel_connection(
 ){
 	println!("forwarding started");
 	loop {
+		tokio::time::sleep(Duration::from_millis(1)).await;
+		println!("loop");
 		let read_ready = read.ready(Interest::READABLE);
 		let write_ready = forwarding_writer.ready(Interest::WRITABLE);
 		tokio::select! {
@@ -195,7 +199,7 @@ async fn setup_tunnel_connection(
 							println!("got client packet");
 							if packet.id == 0 {
 								println!("Broadcast channel set");
-								let external_hostname = String::from_str("random.mcproxy.vincentvibe3.com").unwrap();
+								let external_hostname = String::from_str("mcsrv.local").unwrap();
 								let external_hostname_bytes = external_hostname.as_bytes();
 								let mut clients_locked = clients.write().await;
 								clients_locked.insert(external_hostname.clone(), writer.clone());
@@ -277,7 +281,7 @@ async fn start_tunnel_listener(
     }
 }
 
-#[tokio::main]
+#[tokio::main(flavor="current_thread")]
 async fn main() {
 	let connected_clients: Arc<RwLock<HashMap<String, Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(RwLock::new(HashMap::new()));
 	let tunnels: Arc<RwLock<HashMap<Uuid, Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(RwLock::new(HashMap::new()));
