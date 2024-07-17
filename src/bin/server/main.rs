@@ -13,8 +13,8 @@ async fn handle_client_connection(
 ){
 	println!("client read started");
 	loop {
-		tokio::time::sleep(Duration::from_millis(1)).await;
-		println!("loop 2");
+		// tokio::time::sleep(Duration::from_millis(1)).await;
+		// println!("loop 2");
 		let read_ready = from_client.ready(Interest::READABLE);
 		let write_ready = to_proxy.ready(Interest::WRITABLE);
 		tokio::select! {
@@ -121,8 +121,8 @@ async fn handle_tunnel_connection(
 ){
 	println!("forwarding started");
 	loop {
-		tokio::time::sleep(Duration::from_millis(1)).await;
-		println!("loop");
+		// tokio::time::sleep(Duration::from_millis(1)).await;
+		// println!("loop");
 		let read_ready = read.ready(Interest::READABLE);
 		let write_ready = forwarding_writer.ready(Interest::WRITABLE);
 		tokio::select! {
@@ -281,7 +281,7 @@ async fn start_tunnel_listener(
     }
 }
 
-#[tokio::main(flavor="current_thread")]
+#[tokio::main]
 async fn main() {
 	let connected_clients: Arc<RwLock<HashMap<String, Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(RwLock::new(HashMap::new()));
 	let tunnels: Arc<RwLock<HashMap<Uuid, Arc<Mutex<OwnedWriteHalf>>>>> = Arc::new(RwLock::new(HashMap::new()));
