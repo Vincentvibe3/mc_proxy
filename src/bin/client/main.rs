@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 const TUNNEL_PORT:&str = "25567";
 const MC_PORT: &str = "25566";
-const PROXY_LOCATION: &str = "127.0.0.1";//"proxy.mcproxy.vincentvibe3.com";
+const PROXY_LOCATION: &str = "proxy.mcproxy.vincentvibe3.com";
 
 async fn start_forwarding_connection(connection_id:Uuid){
 	let mut forwarding = TcpStream::connect(PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT).await.unwrap();
