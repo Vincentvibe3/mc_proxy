@@ -1,0 +1,26 @@
+Server:
+Id 0 -> connection handshake
+payload: none
+Id 1 -> new client
+payload: assigned subdomain
+Id 2 -> new connection request
+Payload: uuid
+Id 3 -> new connection ready
+Payload: none
+
+Client:
+Id 0 -> new client
+Id 1 -> new forwarding channel
+payload: uuid
+Id 2 -> keep-alive
+
+
+handshake:
+S -> C id:0
+C -> S id:0
+C -> S id:2
+
+forward:
+mc -> S
+S -> C id:2
+C -> S id:1

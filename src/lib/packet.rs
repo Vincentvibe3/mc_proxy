@@ -1,12 +1,13 @@
-use std::{i32};
+use std::i32;
 
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use uuid::Uuid;
 
-pub struct Packet {
+#[derive(Debug)]
+pub struct Packet<'a> {
     pub size: usize,
     pub id: i32,
-    pub payload: Bytes
+    pub payload: &'a [u8]
 }
 
 pub struct ForwardedPayload {
@@ -14,21 +15,25 @@ pub struct ForwardedPayload {
     pub payload:Bytes
 }
 
-pub fn get_packet(data:&Bytes) -> Result<Packet, &str>{
+pub fn get_packet<'a>(data:&'a BytesMut) -> Option<Packet<'a>>{
     let mut total_bytes_read = 0;
     let (packet_size, bytes_read) = read_varint(data);
     let varint_size = bytes_read;
     let packet_usize = usize::try_from(packet_size).unwrap();
     if data.len()-bytes_read < packet_usize {
-        return Err("Not Enough Bytes");
+        return None;
     }
     total_bytes_read+=bytes_read;
     let (id, bytes_read) = read_varint(&data[total_bytes_read..]);
     total_bytes_read+=bytes_read;
-    return Ok(Packet {
+    let payload = data.get(total_bytes_read..packet_usize+varint_size).unwrap();
+    if total_bytes_read == 0 {
+        return None;
+    }
+    return Some(Packet {
         size: packet_usize+varint_size,
         id: id,
-        payload: data.slice(total_bytes_read..packet_usize+varint_size)
+        payload: payload
     });
 }
 
@@ -47,13 +52,15 @@ pub fn add_size_to_data(buffer: &[u8]) -> Vec<u8>{
     return varint;
 }
 
-pub fn create_packet(buffer: &[u8], id:i32) -> Vec<u8>{
+pub fn create_packet(buffer: &[u8], id:i32) -> BytesMut {
     let id_varint = create_varint(i32::try_from(id).unwrap());
-    let mut packet_data = id_varint;
-    packet_data.extend_from_slice(&buffer);
-    let size_bytes = create_varint(i32::try_from(packet_data.len()).unwrap());
-    let mut packet = size_bytes;
-    packet.extend_from_slice(&packet_data);
+    let id_varint_len = id_varint.len();
+    let payload_len = buffer.len();
+    let size_bytes = create_varint(i32::try_from(payload_len+id_varint_len).unwrap());
+    let mut packet = BytesMut::with_capacity(size_bytes.len()+payload_len+id_varint_len);
+    packet.put_slice(&size_bytes);
+    packet.put_slice(&id_varint);
+    packet.put_slice(buffer);
     return packet;
 }
 
@@ -66,7 +73,7 @@ pub fn create_packet(buffer: &[u8], id:i32) -> Vec<u8>{
 5. Payload
 
 */
-pub fn create_forwarded_packet(buffer: &[u8], uuid:Uuid, id:i32) -> Vec<u8>{
+pub fn create_forwarded_packet(buffer: &[u8], uuid:Uuid, id:i32) -> BytesMut {
     let mut uuid_bytes = uuid.as_bytes().to_vec();
     uuid_bytes.extend_from_slice(&buffer);
     return create_packet(&uuid_bytes, id);

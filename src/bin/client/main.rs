@@ -1,203 +1,154 @@
-use std::{collections::HashMap, fs::read, io::Read, sync::Arc, time::Duration};
+use std::{io::ErrorKind, net::ToSocketAddrs};
 
 use bytes::{Buf, BytesMut};
-use mc_proxy_lib::packet::{create_forwarded_packet, create_packet, create_varint, get_packet};
+use mc_proxy_lib::packet::{create_packet, get_packet};
+use tokio::{io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt}, net::{TcpSocket, TcpStream}};
 use uuid::Uuid;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt, Interest}, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpSocket}, sync::Mutex};
+
 
 const TUNNEL_PORT:&str = "25567";
 const MC_PORT: &str = "25566";
+const PROXY_LOCATION: &str = "127.0.0.1";//"proxy.mcproxy.vincentvibe3.com";
 
-async fn create_new_connection(addr: String) -> (OwnedReadHalf, OwnedWriteHalf){
-	let addr = addr.parse().unwrap();
-    let socket = TcpSocket::new_v4().unwrap();
-    let stream = socket.connect(addr).await.unwrap();
-	let (read, write) = stream.into_split();
-	return (read, write);
-}
-
-async fn tunnel_handler(mut from_proxy:OwnedReadHalf, mut to_server:OwnedWriteHalf, mut data:BytesMut){
+async fn start_forwarding_connection(connection_id:Uuid){
+	let mut forwarding = TcpStream::connect(PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT).await.unwrap();
+	let mut buffer = BytesMut::with_capacity(4096);
 	loop {
-		let read_ready = from_proxy.ready(Interest::READABLE);
-		let write_ready = to_server.ready(Interest::WRITABLE);
-		tokio::select! {
-			ready = read_ready => {
-				if ready.as_ref().unwrap().is_read_closed(){
-					break;
-				}
-				if ready.unwrap().is_readable(){
-					match from_proxy.try_read_buf(&mut data) {
-						Ok(n) => {
-							if n == 0{
-								data.reserve(data.len()+1024);
-								continue;
-							} else {
-								println!("p -> s read {n}");
-							}
-						},
-						Err(_) => {}
-					}
-				}
-			}
-			ready = write_ready => {
-				if ready.as_ref().unwrap().is_write_closed() {
-					break;
-				}
-				if ready.unwrap().is_writable() {
-					match to_server.try_write(&data) {
-						Ok(bytes_written) => {
-							if bytes_written > 0 {
-								println!("p -> s write {bytes_written}");
-							}
-							data.advance(bytes_written);
-						},
-						Err(_) => {}
-					}
-				}
-			}
+		let buffer_capacity = buffer.capacity();
+		if buffer.len() == buffer_capacity{
+			buffer.reserve(buffer_capacity);
 		}
-	}
-	println!("close p->s");
-	to_server.shutdown().await.unwrap();
-}
-
-async fn forwarding_handler(mut from_server: OwnedReadHalf, mut to_proxy: OwnedWriteHalf){
-	let mut data = BytesMut::new();
-	loop {
-		let read_ready = from_server.ready(Interest::READABLE);
-		let write_ready = to_proxy.ready(Interest::WRITABLE);
-		tokio::select! {
-			ready = read_ready => {
-				if ready.as_ref().unwrap().is_read_closed(){
-					break;
-				}
-				if ready.unwrap().is_readable() {
-					match from_server.try_read_buf(&mut data) {
-						Ok(n) => {
-							if n == 0{
-								data.reserve(data.len()+1024);
-								continue;
-							} else {
-								println!("s -> p read {n}");
-							}
-						},
-						Err(_) => {}
-					}
-				}
-
+		forwarding.readable().await;
+		match forwarding.try_read_buf(&mut buffer) {
+			Ok(0) => {
+				println!("dead");
+				break
 			},
-			ready = write_ready => {
-				if ready.as_ref().unwrap().is_write_closed() {
-					break;
-				}
-				if ready.unwrap().is_writable() {
-					match to_proxy.try_write(&data) {
-						Ok(bytes_written) => {
-							if bytes_written > 0 {
-								println!("s -> p write {bytes_written}");
-							}
-							data.advance(bytes_written);
-						},
-						Err(_) => {}
-					}
-				}
-			}
-		}
-	}
-	println!("close s->p");
-	to_proxy.shutdown().await.unwrap();
-}
-
-async fn create_tunnel(uuid:Uuid){
-	let (read, write) = create_new_connection("127.0.0.1:".to_owned()+MC_PORT).await;
-	let (mut tunnel_read, mut tunnel_write) = create_new_connection("proxy.mcproxy.vincentvibe3.com:".to_owned()+TUNNEL_PORT).await;
-	let mut data = BytesMut::new();
-	loop {
-		tunnel_read.readable().await.unwrap();
-		match tunnel_read.read_buf(&mut data).await {
 			Ok(n) => {
-				if n == 0{
-					data.reserve(data.len()+1024);
-					continue;
-				}
-				let bytes = data.clone().freeze();
-
-				match get_packet(&bytes){
-					Ok(packet) => {
-						if packet.id == 0 {
-							println!("forwarding handshake received");
-							let handshake_packet = create_packet(uuid.as_bytes(), 1);
-							tunnel_write.write_all(&handshake_packet).await.unwrap();
-							println!("response sent");
-							data.advance(packet.size);
-							break;
-						}
-					},
-					Err(_) => {}
-				}
-			},
-			Err(_) => {}
+				println!("read {}", n)
+			}
+			Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+				continue;
+			}
+			Err(e) => {
+				eprintln!("error {}", e);
+				break
+			}
+		}
+		if let Some(packet) = get_packet(&buffer) {
+			match packet.id {
+				0 => {
+					buffer.advance(packet.size);
+					break;
+				},
+				_ => {}
+			}
+			buffer.advance(packet.size);
 		}
 	}
-	tokio::spawn(async move {
-		forwarding_handler(read, tunnel_write).await;
-	});
-	tokio::spawn(async move {
-		tunnel_handler( tunnel_read, write, data).await;
-	});
+	let mut server = TcpStream::connect("127.0.0.1".to_owned()+":"+MC_PORT).await.unwrap();
+	println!("forwarding starting");
+	let sent_packet = create_packet(connection_id.as_bytes(), 1);
+	forwarding.write_all(&sent_packet).await.unwrap();
+	println!("notified new connection");
+	// wait for ready
+	loop {
+		let buffer_capacity = buffer.capacity();
+		if buffer.len() == buffer_capacity{
+			buffer.reserve(buffer_capacity);
+		}
+		forwarding.readable().await;
+		match forwarding.try_read_buf(&mut buffer) {
+			Ok(0) => {
+				println!("dead");
+				break
+			},
+			Ok(n) => {
+				println!("read 2 {}", n);
+				println!("buf {:?}", &buffer);
+			}
+			Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+				continue;
+			}
+			Err(e) => {
+				eprintln!("error {}", e);
+				break
+			}
+		}
+		if let Some(packet) = get_packet(&buffer) {
+			match packet.id {
+				3 => {
+					println!("packet found");
+					buffer.advance(packet.size);
+					break;
+				},
+				_ => {
+					println!("unknown");
+				}
+			}
+			buffer.advance(packet.size);
+		}
+	}
+	println!("start proxying");
+	server.writable().await;
+	server.write_all(&buffer).await;
+	match copy_bidirectional(&mut forwarding, &mut server).await {
+        Ok((n1, n2)) => {
+			println!("{} {}: bidirectional", n2, n2);
+		}
+        Err(e) => eprintln!("An error occured proxying tunnel: {}", e),
+    }
 }
 
 #[tokio::main]
 async fn main() {
-	let addr = "127.0.0.1:25567".parse().unwrap();
-    let socket = TcpSocket::new_v4().unwrap();
-    let stream = socket.connect(addr).await.unwrap();
-	let (mut read, mut write) = stream.into_split();
-	// write.writable().await.unwrap();
-	// let packet = create_packet(&[], 0);
-	// write.write_all(&packet).await.unwrap();
-	let mut shared_write = write;
-	let mut users: HashMap<Uuid, OwnedWriteHalf> = HashMap::new();
-	let mut handshake_done = false;
-
-	let mut data = BytesMut::new();
-	loop {
-		println!("punch through read loop");
-		read.readable().await.unwrap();
-		match read.read_buf(&mut data).await {
-			Ok(n) => {
-				if n == 0{
-					data.reserve(data.len()+1024);
-					continue;
-				}
-				let bytes = data.clone().freeze();
-				match get_packet(&bytes){
-					Ok(packet) => {
-						if packet.id == 0 {
-							let handshake_packet = create_packet(&[0;0], 0);
-							shared_write.write_all(&handshake_packet).await.unwrap();
-							handshake_done = true;
-							println!("handshake done");
-						}else if packet.id == 1 {
-							let hostname = String::from_utf8(packet.payload.to_vec()).unwrap();
-							println!("{hostname}");
-						} else if packet.id == 2 {
-							let uuid = Uuid::from_slice(&packet.payload[..16]).unwrap();
-							tokio::spawn(async move {
-								create_tunnel(uuid).await;
-							});
-						}
-						data.advance(packet.size);
-					},
-					Err(_) => {
-						continue;
-					}
-				}
+	let mut stream = TcpStream::connect(PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT).await.unwrap();
+	println!("starting");
+	let mut buffer = BytesMut::with_capacity(4096);
+	let mut assigned_hostname = "".to_string();
+    loop {
+		println!("buf len {}", buffer.len());
+		let buffer_capacity = buffer.capacity();
+		if buffer.len() == buffer_capacity{
+			buffer.reserve(buffer_capacity);
+		}
+		stream.readable().await;
+		match stream.try_read_buf(&mut buffer) {
+			Ok(0) => {
+				println!("dead");
+				break
 			},
-			Err(_) => {
-
+			Ok(n) => {}
+			Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+				continue;
+			}
+			Err(e) => {
+				eprintln!("error {}", e);
+				break
 			}
 		}
+		while let Some(packet) = get_packet(&buffer) {
+			match packet.id {
+				0 => {
+					let sent_packet = create_packet(&[0;0], 0);
+					stream.write_all(&sent_packet).await.unwrap();
+					// println!("sent handshake");
+				},
+				1 => {
+					let hostname = String::from_utf8(packet.payload.to_vec()).unwrap();
+					assigned_hostname = hostname.clone();
+					println!("assigned host {}", hostname);
+				},
+				2 => {
+					let connection_id = Uuid::from_slice(&packet.payload).unwrap();
+					println!("creating new connection");
+					tokio::spawn(async move {
+						start_forwarding_connection(connection_id).await;
+					});
+				},
+				_ => {}
+			}
+			buffer.advance(packet.size);
+		}
 	}
-    
 }
