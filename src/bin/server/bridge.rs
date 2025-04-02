@@ -26,7 +26,10 @@ pub async fn copy_to_stream(sending_stream: OwnedReadHalf, receiving_stream: Own
         if buffer.len() < buffer_capacity{
             sending_stream.readable().await;
             match sending_stream.try_read_buf(&mut buffer){
-                Ok(0) => break,
+                Ok(0) => {
+                    println!("eof detected");
+                    break
+                },
                 Ok(n) => {},
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                     continue;
@@ -36,7 +39,10 @@ pub async fn copy_to_stream(sending_stream: OwnedReadHalf, receiving_stream: Own
         }
         receiving_stream.writable().await;
         match receiving_stream.try_write(&buffer) {
-            Ok(0) => break,
+            Ok(0) => {
+                println!("eof detected");
+                break
+            },
             Ok(n) => {
                 buffer.advance(n);
             },

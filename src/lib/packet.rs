@@ -16,6 +16,7 @@ pub struct ForwardedPayload {
 }
 
 pub fn get_packet<'a>(data:&'a BytesMut) -> Option<Packet<'a>>{
+    println!("{:?}", create_packet(&[0;0], 0));
     let mut total_bytes_read = 0;
     let (packet_size, bytes_read) = read_varint(data);
     let varint_size = bytes_read;
@@ -105,7 +106,9 @@ pub fn read_varint(buffer: &[u8]) -> (i32, usize){
     let mut bytes_read = 0;
     for byte in buffer{
         let data = i32::from(byte & DATA_BITS) << position;
+        println!("d {}", data);
         value |= data;
+        println!("v{}", value);
         bytes_read+=1;
         if byte & CONTINUE_BIT == 0{
             break;

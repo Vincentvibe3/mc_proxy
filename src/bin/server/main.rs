@@ -20,6 +20,7 @@ async fn start_tunnel_listener(state: Arc<RwLock<State>>) -> io::Result<()> {
 
     loop {
         let (socket, _) = listener.accept().await?;
+        socket.set_nodelay(true)?;
         let pending_connections = state.clone();
         tokio::spawn(async move {
             tunnel::handshake_tunnel_socket(socket, pending_connections).await;
@@ -33,6 +34,7 @@ async fn start_client_listener(state: Arc<RwLock<State>>) -> io::Result<()> {
 
     loop {
         let (socket, _) = listener.accept().await?;
+        socket.set_nodelay(true)?;
         let pending_connections = state.clone();
         tokio::spawn(async move {
             client::handshake_client_socket(socket, pending_connections).await;
@@ -40,7 +42,7 @@ async fn start_client_listener(state: Arc<RwLock<State>>) -> io::Result<()> {
     }
 }
 
-#[tokio::main]
+#[tokio::main()]
 async fn main() {
     let connections = Arc::new(RwLock::new(State::new()));
     let pending_connections = connections.clone();

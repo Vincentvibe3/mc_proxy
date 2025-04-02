@@ -1,17 +1,18 @@
-use std::{io::ErrorKind, net::ToSocketAddrs};
+use std::{error::Error, io::ErrorKind, net::ToSocketAddrs};
 
 use bytes::{Buf, BytesMut};
 use mc_proxy_lib::packet::{create_packet, get_packet};
-use tokio::{io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt}, net::{TcpSocket, TcpStream}};
+use tokio::{io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt}, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpSocket, TcpStream}};
 use uuid::Uuid;
 
 
 const TUNNEL_PORT:&str = "25567";
 const MC_PORT: &str = "25566";
-const PROXY_LOCATION: &str = "proxy.mcproxy.vincentvibe3.com";
+const PROXY_LOCATION: &str = "127.0.0.1";//"proxy.mcproxy.vincentvibe3.com";//
 
 async fn start_forwarding_connection(connection_id:Uuid){
 	let mut forwarding = TcpStream::connect(PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT).await.unwrap();
+	forwarding.set_nodelay(true).unwrap();
 	let mut buffer = BytesMut::with_capacity(4096);
 	loop {
 		let buffer_capacity = buffer.capacity();
@@ -92,17 +93,64 @@ async fn start_forwarding_connection(connection_id:Uuid){
 	println!("start proxying");
 	server.writable().await;
 	server.write_all(&buffer).await;
-	match copy_bidirectional(&mut forwarding, &mut server).await {
-        Ok((n1, n2)) => {
-			println!("{} {}: bidirectional", n2, n2);
-		}
-        Err(e) => eprintln!("An error occured proxying tunnel: {}", e),
+	let (client_read, client_write) = server.into_split();
+    let (tunnel_read, tunnel_write) = forwarding.into_split();
+    tokio::spawn(async move {
+        copy_to_stream(client_read,tunnel_write).await;
+    });
+    copy_to_stream(tunnel_read, client_write).await;
+	// match copy_bidirectional(&mut forwarding, &mut server).await {
+    //     Ok((n1, n2)) => {
+	// 		println!("{} {}: bidirectional", n2, n2);
+	// 	}
+    //     Err(e) => eprintln!("An error occured proxying tunnel: {}", e),
+    // }
+}
+
+pub async fn copy_to_stream(sending_stream: OwnedReadHalf, receiving_stream: OwnedWriteHalf){
+    let buffer_capacity = 1000000;
+    let mut buffer =  BytesMut::with_capacity(buffer_capacity);
+    loop {
+        if buffer.len() < buffer_capacity{
+            sending_stream.readable().await;
+            match sending_stream.try_read_buf(&mut buffer){
+                Ok(0) => {
+                    println!("eof detected");
+                    break
+                },
+                Ok(n) => {
+					// println!("read {}", n);
+				},
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(e) => break,
+            }
+        }
+        receiving_stream.writable().await;
+        match receiving_stream.try_write(&buffer) {
+            Ok(0) => {
+                println!("eof detected");
+                break
+            },
+            Ok(n) => {
+				// println!("write {}", n);
+                buffer.advance(n);
+            },
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                continue;
+            }
+            Err(e) => break,
+        }
     }
 }
 
+
 #[tokio::main]
 async fn main() {
+	println!("{}", PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT);
 	let mut stream = TcpStream::connect(PROXY_LOCATION.to_owned()+":"+TUNNEL_PORT).await.unwrap();
+	stream.set_nodelay(true).unwrap();
 	println!("starting");
 	let mut buffer = BytesMut::with_capacity(4096);
 	let mut assigned_hostname = "".to_string();
