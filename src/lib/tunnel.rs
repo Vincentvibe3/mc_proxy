@@ -53,6 +53,7 @@ pub async fn tcp_to_quic(mut read:OwnedReadHalf, mut send:SendStream, mut data:B
     // tokio::spawn(async move {
     //     quic_send(send, channel_recv).await;
     // });
+	send.write_all(&data).await?;
 	let mut buffer = BufReader::with_capacity(10240, read);
 	copy_buf(&mut buffer, &mut send).await?;
     // loop {
