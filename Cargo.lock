@@ -518,6 +518,7 @@ dependencies = [
  "bytes",
  "futures",
  "quinn",
+ "rand",
  "rcgen",
  "rustls",
  "tokio",

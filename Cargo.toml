@@ -11,6 +11,7 @@ uuid = { version = "1.9.1", features = [ "v4","fast-rng","macro-diagnostics"]}
 quinn = "0.11.9"
 rustls = "0.23"
 rcgen = "0.13.2"
+rand = "0.9.2"
 
 [lib]
 name = "mc_proxy_lib"
@@ -23,3 +24,11 @@ path = "src/bin/client/main.rs"
 [[bin]]
 name = "server"
 path = "src/bin/server/main.rs"
+
+[[bin]]
+name = "bench_send"
+path = "src/bin/bench_send/main.rs"
+
+[[bin]]
+name = "bench_recv"
+path = "src/bin/bench_recv/main.rs"
