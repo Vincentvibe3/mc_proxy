@@ -3,7 +3,7 @@ use std::{collections::{HashMap, VecDeque}, error::Error, fs::File, io::{self, I
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures::{future::poll_fn, select, SinkExt};
 use mc_proxy_lib::{packet::{self, create_packet, get_packet, read_string, read_varint}, tunnel::{quic_to_tcp, tcp_to_quic}};
-use quinn::{Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig};
+use quinn::{Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt};
 use rcgen::CertifiedKey;
 use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
 use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}, time::sleep};
@@ -149,6 +149,8 @@ async fn setup_quic_server(connections:Arc<RwLock<HashMap<String, Connection>>>)
     // Start iterating over incoming connections.
     while let Some(conn) = endpoint.accept().await {
         let connection = conn.await?;
+        connection.set_receive_window(VarInt::from_u32(10000000));
+        connection.set_send_window(10000000);
         let connections_list = connections.clone();
         tokio::spawn(async move {
             handle_tunnel_client(connection, connections_list).await.unwrap();

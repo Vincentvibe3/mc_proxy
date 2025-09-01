@@ -5,7 +5,7 @@ use quinn::{RecvStream, SendStream};
 use tokio::{io::{self, copy, copy_bidirectional, copy_buf, AsyncWriteExt, BufReader}, net::tcp::{OwnedReadHalf, OwnedWriteHalf}, sync::mpsc::{self, Receiver}};
 
 pub async fn quic_to_tcp(read:RecvStream, mut send:OwnedWriteHalf)-> Result<(), Box<dyn Error>>{
-	let mut buffer = BufReader::with_capacity(10240, read);
+	let mut buffer = BufReader::with_capacity(10000000, read);
 	copy_buf(&mut buffer, &mut send).await?;
     // let (channel_send, channel_recv): (mpsc::Sender<Bytes>, Receiver<Bytes>) = mpsc::channel(500);
     // tokio::spawn(async move {
@@ -49,12 +49,12 @@ async fn quic_send(mut send:SendStream, mut channel:Receiver<Bytes>)-> Result<()
 }
 
 pub async fn tcp_to_quic(mut read:OwnedReadHalf, mut send:SendStream, mut data:BytesMut) -> Result<(), Box<dyn Error>>{
-    let (channel_send, channel_recv): (mpsc::Sender<Bytes>, Receiver<Bytes>) = mpsc::channel(500);
+    // let (channel_send, channel_recv): (mpsc::Sender<Bytes>, Receiver<Bytes>) = mpsc::channel(500);
     // tokio::spawn(async move {
     //     quic_send(send, channel_recv).await;
     // });
 	send.write_all(&data).await?;
-	let mut buffer = BufReader::with_capacity(10240, read);
+	let mut buffer = BufReader::with_capacity(10000000, read);
 	copy_buf(&mut buffer, &mut send).await?;
     // loop {
 	// 	// println!("t read");

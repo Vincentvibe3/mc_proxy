@@ -4,7 +4,7 @@ use std::{error::Error, fs::File, io::Read, net::{IpAddr, Ipv4Addr, SocketAddr, 
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use mc_proxy_lib::{packet::{create_packet, get_packet}, tunnel::{quic_to_tcp, tcp_to_quic}};
-use quinn::{crypto::rustls::{NoInitialCipherSuite, QuicClientConfig}, ClientConfig, Connection, Endpoint};
+use quinn::{crypto::rustls::{NoInitialCipherSuite, QuicClientConfig}, ClientConfig, Connection, Endpoint, VarInt};
 use rustls::pki_types::{pem::PemObject, CertificateDer};
 use tokio::{net::TcpStream, time::sleep};
 
@@ -81,6 +81,8 @@ async fn main()-> Result<(), Box<dyn Error>> {
     let server_addr: SocketAddr = "mcsrv.vincentvibe3.com:5001".to_socket_addrs().unwrap().next().unwrap();
     println!("{}", server_addr.port());
 	let connection = endpoint.connect(server_addr, SERVER_NAME).unwrap().await.unwrap();
+    connection.set_receive_window(VarInt::from_u32(10000000));
+    connection.set_send_window(10000000);
     let connection2 = connection.clone();
     tokio::spawn(async move {
         tunnel_listener(connection2).await;
