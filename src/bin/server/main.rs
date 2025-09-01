@@ -54,7 +54,7 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
             println!("found packet");
             if packet.id == 0 {
                 // handshake
-                let subdomain = "mcsrv.local";
+                let subdomain = "test.mcproxy.vincentvibe3.com";
                 let subdomain_bytes = subdomain.as_bytes();
                 let handshake_packet = create_packet(subdomain_bytes, 0);
                 send.write_chunk(handshake_packet.freeze()).await?;
