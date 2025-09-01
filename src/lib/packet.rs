@@ -16,7 +16,7 @@ pub struct ForwardedPayload {
 }
 
 pub fn get_packet<'a>(data:&'a BytesMut) -> Option<Packet<'a>>{
-    println!("{:?}", create_packet(&[0;0], 0));
+    // println!("{:?}", create_packet(&[0;0], 0));
     let mut total_bytes_read = 0;
     let (packet_size, bytes_read) = read_varint(data);
     let varint_size = bytes_read;
