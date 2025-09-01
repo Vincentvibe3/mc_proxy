@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, error::Error, fs::File, io::{self, IoSlice, Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr}, ops::SubAssign, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, error::Error, fs::File, io::{self, IoSlice, Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr}, ops::SubAssign, sync::Arc, time::Duration};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures::{future::poll_fn, select, SinkExt};
@@ -6,7 +6,7 @@ use mc_proxy_lib::{packet::{self, create_packet, get_packet, read_string, read_v
 use quinn::{Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig};
 use rcgen::CertifiedKey;
 use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
-use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}};
+use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}, time::sleep};
 
 
 const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
@@ -42,6 +42,7 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
     let mut recv = stream.1;
     // send assigned subdomain
     let mut buffer = BytesMut::with_capacity(4096);
+    let mut setup = false;
     loop {
         let chunk = recv.read_chunk(4096, true).await?.unwrap();
         let current_buffer_capacity = buffer.capacity();
@@ -60,6 +61,7 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
                 send.write_chunk(handshake_packet.freeze()).await?;
                 let mut connections_list = connections.write().await;
                 connections_list.insert(subdomain.to_string(), conn);
+                setup = true;
             }
             else if packet.id == 1 {
                 // unusused
@@ -69,6 +71,9 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
             buffer.advance(packet.size);
 		    break;
 	   }
+       if setup {
+            sleep(Duration::new(15, 0)).await;
+       }
     }
     Ok(())
 }

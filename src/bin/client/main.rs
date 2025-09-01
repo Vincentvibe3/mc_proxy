@@ -1,12 +1,12 @@
 mod certverification;
 
-use std::{error::Error, fs::File, io::Read, net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs}, sync::Arc};
+use std::{error::Error, fs::File, io::Read, net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs}, sync::Arc, time::Duration};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use mc_proxy_lib::{packet::{create_packet, get_packet}, tunnel::{quic_to_tcp, tcp_to_quic}};
 use quinn::{crypto::rustls::{NoInitialCipherSuite, QuicClientConfig}, ClientConfig, Connection, Endpoint};
 use rustls::pki_types::{pem::PemObject, CertificateDer};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::sleep};
 
 use crate::certverification::SkipServerVerification;
 
@@ -53,6 +53,7 @@ async fn handle_message_stream(connection:Connection) -> Result<(), Box<dyn Erro
     let packet = create_packet(&[0;0], 0);
     send.write_chunk(packet.freeze()).await?;
     let mut data = BytesMut::with_capacity(4096);
+    let mut setup = false;
     loop {
         if let Some(chunk) = recv.read_chunk(4096, true).await.unwrap(){
             data.put(chunk.bytes);
@@ -62,7 +63,11 @@ async fn handle_message_stream(connection:Connection) -> Result<(), Box<dyn Erro
                 let hostname = String::from_utf8(packet.payload.to_vec()).unwrap();
                 println!("{}", hostname);
                 data.advance(packet.size);
+                setup = true;
             }
+        }
+        if setup {
+            sleep(Duration::new(15, 0)).await;
         }
     }
     Ok(())
