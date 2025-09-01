@@ -9,7 +9,7 @@ use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
 use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}, time::sleep};
 
 
-const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
+const SERVER_NAME: &str = "mcsrv.vincentvibe3.com";
 const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 const CLIENT_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5000);
 const SERVER_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5001);
@@ -55,7 +55,7 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
             println!("found packet");
             if packet.id == 0 {
                 // handshake
-                let subdomain = "test.mcproxy.vincentvibe3.com";
+                let subdomain = "mcsrv.vincentvibe3.com";
                 let subdomain_bytes = subdomain.as_bytes();
                 let handshake_packet = create_packet(subdomain_bytes, 0);
                 send.write_chunk(handshake_packet.freeze()).await?;
