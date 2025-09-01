@@ -2,7 +2,7 @@ use std::error::Error;
 
 use bytes::{Bytes, BytesMut};
 use quinn::{RecvStream, SendStream};
-use tokio::{io::{self, AsyncWriteExt}, net::tcp::{OwnedReadHalf, OwnedWriteHalf}, sync::mpsc::{self, Receiver}};
+use tokio::{io::{self, copy_bidirectional, AsyncWriteExt}, net::tcp::{OwnedReadHalf, OwnedWriteHalf}, sync::mpsc::{self, Receiver}};
 
 pub async fn quic_to_tcp(mut read:RecvStream, mut send:OwnedWriteHalf)-> Result<(), Box<dyn Error>>{
     let (channel_send, channel_recv): (mpsc::Sender<Bytes>, Receiver<Bytes>) = mpsc::channel(500);
@@ -60,14 +60,16 @@ pub async fn tcp_to_quic(read:OwnedReadHalf, send:SendStream, mut data:BytesMut)
             Ok(0) => break,
             Ok(n) => {
                 // println!("read {} bytes", n);
-                channel_send.send(data.split().freeze()).await?;
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                continue;
+                // continue;
             }
             Err(e) => {
                 return Err(e.into());
             }
+        }
+		if data.len() != 0 {
+            channel_send.send(data.split().freeze()).await?;
         }
         
     }

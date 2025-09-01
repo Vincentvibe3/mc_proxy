@@ -9,8 +9,8 @@ use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
 use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}};
 
 
-const SERVER_NAME: &str = "localhost";
-const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
+const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 const CLIENT_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5000);
 const SERVER_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5001);
 const CLIENT_PORT:&str = "25565";
@@ -25,7 +25,7 @@ fn save_cert_to_file(cert:&String, private_key:&String) -> std::io::Result<()>{
 
 fn generate_self_signed_cert()
 -> Result<(CertificateDer<'static>, PrivatePkcs8KeyDer<'static>), Box<dyn Error>> {
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    let cert = rcgen::generate_simple_self_signed(vec![SERVER_NAME.to_string()])?;
     println!("{}", cert.cert.pem());
     println!("{}", cert.key_pair.serialize_pem());
     save_cert_to_file(&(cert.cert.pem()), &(cert.key_pair.serialize_pem()))?;

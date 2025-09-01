@@ -1,6 +1,6 @@
 mod certverification;
 
-use std::{error::Error, fs::File, io::Read, net::{IpAddr, Ipv4Addr, SocketAddr}, sync::Arc};
+use std::{error::Error, fs::File, io::Read, net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs}, sync::Arc};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use mc_proxy_lib::{packet::{create_packet, get_packet}, tunnel::{quic_to_tcp, tcp_to_quic}};
@@ -10,10 +10,9 @@ use tokio::net::TcpStream;
 
 use crate::certverification::SkipServerVerification;
 
-const SERVER_NAME: &str = "localhost";
+const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
 const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-const CLIENT_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5000);
-const SERVER_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, 5001);
+const CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 5000);
 const TUNNEL_PORT:&str = "25567";
 const MC_PORT: &str = "25566";
 const PROXY_LOCATION: &str = "127.0.0.1";//"proxy.mcproxy.vincentvibe3.com";//
@@ -74,7 +73,9 @@ async fn main()-> Result<(), Box<dyn Error>> {
 	let client_config = configure_client().unwrap();
 	let mut endpoint = Endpoint::client(CLIENT_ADDR).unwrap();
     endpoint.set_default_client_config(client_config);
-	let connection = endpoint.connect(SERVER_ADDR, SERVER_NAME).unwrap().await.unwrap();
+    let server_addr: SocketAddr = "test.mcproxy.vincentvibe3.com:5001".to_socket_addrs().unwrap().next().unwrap();
+    println!("{}", server_addr.port());
+	let connection = endpoint.connect(server_addr, SERVER_NAME).unwrap().await.unwrap();
     let connection2 = connection.clone();
     tokio::spawn(async move {
         tunnel_listener(connection2).await;
