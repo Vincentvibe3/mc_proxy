@@ -10,7 +10,7 @@ use tokio::{net::TcpStream, time::sleep};
 
 use crate::certverification::SkipServerVerification;
 
-const SERVER_NAME: &str = "mcsrv.vincentvibe3.com";
+const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
 const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 5000);
 const TUNNEL_PORT:&str = "25567";
@@ -78,7 +78,7 @@ async fn main()-> Result<(), Box<dyn Error>> {
 	let client_config = configure_client().unwrap();
 	let mut endpoint = Endpoint::client(CLIENT_ADDR).unwrap();
     endpoint.set_default_client_config(client_config);
-    let server_addr: SocketAddr = "mcsrv.vincentvibe3.com:5001".to_socket_addrs().unwrap().next().unwrap();
+    let server_addr: SocketAddr = "test.mcproxy.vincentvibe3.com:5001".to_socket_addrs().unwrap().next().unwrap();
     println!("{}", server_addr.port());
 	let connection = endpoint.connect(server_addr, SERVER_NAME).unwrap().await.unwrap();
     connection.set_receive_window(VarInt::from_u32(10000000));
