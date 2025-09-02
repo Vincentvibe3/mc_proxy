@@ -8,7 +8,7 @@ use tokio::{io::AsyncWriteExt, net::TcpStream};
 #[tokio::main()]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let mut rng = rand::rng();
-	let mut stream = TcpStream::connect("127.0.0.1:25565").await.unwrap();
+	let mut stream = TcpStream::connect("mcsrv.vincentvibe3.com:25565").await.unwrap();
 	println!("connect");
 	let mut data = Vec::with_capacity(10000000);
 	for _ in 0..data.capacity() {

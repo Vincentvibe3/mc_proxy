@@ -2,7 +2,7 @@ use std::{collections::{HashMap, VecDeque}, error::Error, fs::File, io::{self, I
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures::{future::poll_fn, select, SinkExt};
-use mc_proxy_lib::{packet::{self, create_packet, get_packet, read_string, read_varint}, tunnel::{quic_to_tcp, tcp_to_quic}};
+use mc_proxy_lib::{packet::{self, create_packet, create_varint, get_packet, read_string, read_varint}, tunnel::{quic_to_tcp, tcp_to_quic}};
 use quinn::{Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt};
 use rcgen::CertifiedKey;
 use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
@@ -81,6 +81,8 @@ async fn handle_tunnel_client(conn:Connection, connections:Arc<RwLock<HashMap<St
 async fn handle_connection(mut stream:TcpStream, connections:Arc<RwLock<HashMap<String, Connection>>>)-> Result<(), Box<dyn Error>>{
     let mut hostname = "".to_string();
     let mut data = BytesMut::with_capacity(4096);
+    let mut final_data = BytesMut::with_capacity(4096);
+    let mut new_packet_bytes:BytesMut = BytesMut::with_capacity(0);
     while hostname == "" {
         stream.readable().await?;
         if data.len() == data.capacity(){
@@ -100,11 +102,23 @@ async fn handle_connection(mut stream:TcpStream, connections:Arc<RwLock<HashMap<
         }
         if let Some(packet) = packet::get_packet(&data) {
             let (_, bytes_read) = read_varint(&packet.payload);
-            let (read_hostname, _) = read_string(&packet.payload[bytes_read..]);
+            let (read_hostname, string_len) = read_string(&packet.payload[bytes_read..]);
+            let new_hostname = "127.0.0.1";
+            let mut string = create_varint(new_hostname.len().try_into().unwrap());
+            string.append(&mut new_hostname.as_bytes().to_vec());
+            let proto_ver = &packet.payload[..bytes_read];
+            let payload = &packet.payload[bytes_read+string_len..];
+            let mut new_packet = vec![];
+            new_packet.append(&mut proto_ver.to_vec());
+            new_packet.append(&mut string);
+            new_packet.append(&mut payload.to_vec());
+            new_packet_bytes = create_packet(&new_packet, 0);
             hostname = read_hostname;
+            data.advance(packet.size);
             println!("set hostname {hostname}");
         }
     }
+    new_packet_bytes.put(data);
     let connection_list = connections.read().await;
     if let Some(connection) = connection_list.get(&hostname){
         let split = stream.into_split();
@@ -116,7 +130,7 @@ async fn handle_connection(mut stream:TcpStream, connections:Arc<RwLock<HashMap<
         tokio::spawn(async move {
             quic_to_tcp(recv, write).await;
         });
-        tcp_to_quic(read, send, data).await?;
+        tcp_to_quic(read, send, new_packet_bytes).await?;
     } else {
         stream.shutdown().await?;
     }
