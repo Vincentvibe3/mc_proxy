@@ -16,8 +16,8 @@ pub async fn quic_to_tcp(mut read:RecvStream, mut send:OwnedWriteHalf)-> Result<
         let chunk_opt = read.read_chunk(4096, true).await.unwrap();
         if let Some(data) = chunk_opt {
             channel_send.send(data.bytes).await?;
-            yield_now().await;
         }
+        yield_now().await;
     }
 	Ok(())
 }
@@ -33,7 +33,6 @@ async fn tcp_send(mut send:OwnedWriteHalf, mut channel:Receiver<Bytes>)-> Result
                     Ok(0) => break 'ext,
                     Ok(n) => {
                         bytes_written+=n;
-                        yield_now().await;
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                         continue;
@@ -45,6 +44,7 @@ async fn tcp_send(mut send:OwnedWriteHalf, mut channel:Receiver<Bytes>)-> Result
                 if bytes_written == value.len() {
                     break;
                 }
+                yield_now().await;
             }
 			
 			// send.write_all(&value).await?;
@@ -66,7 +66,6 @@ async fn quic_send(mut send:SendStream, mut channel:Receiver<Bytes>)-> Result<()
                     Ok(0) => break 'ext,
                     Ok(n) => {
                         bytes_written+=n;
-                        yield_now().await;
                     },
                     Err(e) => {
                         return Err(e.into());
@@ -81,6 +80,7 @@ async fn quic_send(mut send:SendStream, mut channel:Receiver<Bytes>)-> Result<()
         } else {
             break;
         }
+        yield_now().await;
     }
     Ok(())
 }
@@ -103,7 +103,6 @@ pub async fn tcp_to_quic(mut read:OwnedReadHalf, mut send:SendStream, mut data:B
             Ok(0) => break,
             Ok(n) => {
                 // println!("read {} bytes", n);
-                yield_now().await;
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 // continue;
@@ -115,7 +114,7 @@ pub async fn tcp_to_quic(mut read:OwnedReadHalf, mut send:SendStream, mut data:B
 		if data.len() != 0 {
             channel_send.send(data.split().freeze()).await?;
         }
-        
+        yield_now().await;
     }
     Ok(())
 }
