@@ -141,6 +141,7 @@ async fn handle_connection(mut stream:TcpStream, connections:Arc<RwLock<HashMap<
         let quic_stream = connection.open_bi().await.unwrap();
         let send = quic_stream.0;
         let recv = quic_stream.1;
+        println!("connection forwarding starting");
         tokio::spawn(async move {
             quic_to_tcp(recv, write).await;
         });
