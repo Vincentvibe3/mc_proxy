@@ -23,13 +23,32 @@ pub async fn quic_to_tcp(mut read:RecvStream, mut send:OwnedWriteHalf)-> Result<
 }
 
 async fn tcp_send(mut send:OwnedWriteHalf, mut channel:Receiver<Bytes>)-> Result<(), Box<dyn Error>>{
-	loop {
+	'ext:loop {
 		
 		if let Some(value) = channel.recv().await {
-			send.writable().await?;
-			send.write_all(&value).await?;
+            let mut bytes_written = 0;
+            loop {
+                send.writable().await?;
+                match send.try_write(&value[bytes_written..]) {
+                    Ok(0) => break 'ext,
+                    Ok(n) => {
+                        bytes_written+=n;
+                        yield_now().await;
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        continue;
+                    }
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
+                if bytes_written == value.len() {
+                    break;
+                }
+            }
+			
+			// send.write_all(&value).await?;
 			// println!("t send");
-            yield_now().await;
 		} else {
 			break;
 		}
@@ -38,12 +57,27 @@ async fn tcp_send(mut send:OwnedWriteHalf, mut channel:Receiver<Bytes>)-> Result
 }
 
 async fn quic_send(mut send:SendStream, mut channel:Receiver<Bytes>)-> Result<(), Box<dyn Error>> {
-    loop {
+    'ext:loop {
 		
         if let Some(value) = channel.recv().await {
-            send.write_chunk(value).await?; 
+            let mut bytes_written = 0;
+            loop {
+                  match send.write(&value[bytes_written..]).await {
+                    Ok(0) => break 'ext,
+                    Ok(n) => {
+                        bytes_written+=n;
+                        yield_now().await;
+                    },
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
+                if bytes_written == value.len() {
+                    break;
+                }
+            }
+            // send.write_chunk(value).await?; 
 			// println!("q send");
-            yield_now().await;
         } else {
             break;
         }
