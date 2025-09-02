@@ -153,7 +153,7 @@ async fn handle_connection(mut stream:TcpStream, connections:Arc<RwLock<HashMap<
 
 
 
-async fn setup_tcp_server(connections:Arc<RwLock<HashMap<String, Connection>>>){
+async fn setup_tcp_server(connections:Arc<RwLock<HashMap<String, Connection>>>) -> Result<(), Box<dyn Error>>{
     let listener = tokio::net::TcpListener::bind("0.0.0.0:25565").await.unwrap();
     loop {
         let socket = listener.accept().await.unwrap();
@@ -161,7 +161,7 @@ async fn setup_tcp_server(connections:Arc<RwLock<HashMap<String, Connection>>>){
 		let clients = connections.clone();
         tokio::spawn(async move {
             let stream = socket.0;
-            stream.set_nodelay(true)?;
+            stream.set_nodelay(true);
             handle_connection(stream, clients).await.unwrap();
         });
 
