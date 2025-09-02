@@ -161,6 +161,7 @@ async fn setup_tcp_server(connections:Arc<RwLock<HashMap<String, Connection>>>){
 		let clients = connections.clone();
         tokio::spawn(async move {
             let stream = socket.0;
+            stream.set_nodelay(true)?;
             handle_connection(stream, clients).await.unwrap();
         });
 

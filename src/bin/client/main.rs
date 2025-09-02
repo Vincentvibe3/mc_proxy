@@ -39,6 +39,7 @@ async fn tunnel_listener(connection:Connection) -> Result<(), Box<dyn Error>>{
     loop {
         let (send, recv) = connection.accept_bi().await.unwrap();
         let stream = TcpStream::connect("127.0.0.1".to_owned()+":"+MC_PORT).await.unwrap();
+        stream.set_nodelay(true)?;
         let (read, write) = stream.into_split();
         let buf = BytesMut::with_capacity(4096);
         tokio::spawn(async move {
