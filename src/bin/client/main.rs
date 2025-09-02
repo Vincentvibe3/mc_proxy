@@ -14,7 +14,7 @@ const SERVER_NAME: &str = "test.mcproxy.vincentvibe3.com";
 const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 5000);
 const TUNNEL_PORT:&str = "25567";
-const MC_PORT: &str = "25566";
+const MC_PORT: &str = "25565";
 const PROXY_LOCATION: &str = "127.0.0.1";//"proxy.mcproxy.vincentvibe3.com";//
 
 fn configure_insecure_client() -> Result<ClientConfig, NoInitialCipherSuite> {

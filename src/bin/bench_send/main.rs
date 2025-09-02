@@ -8,13 +8,13 @@ use tokio::{io::AsyncWriteExt, net::TcpStream};
 #[tokio::main()]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let mut rng = rand::rng();
-	let mut stream = TcpStream::connect("mcsrv.vincentvibe3.com:25565").await.unwrap();
+	let mut stream = TcpStream::connect("test.mcproxy.vincentvibe3.com:25565").await.unwrap();
 	println!("connect");
 	let mut data = Vec::with_capacity(10000000);
 	for _ in 0..data.capacity() {
 		data.push(rng.random::<u8>());
 	}
-	let subdomain = "mcsrv.vincentvibe3.com";
+	let subdomain = "test.mcproxy.vincentvibe3.com";
 	let subdomain_bytes = subdomain.as_bytes();
 	let mut proto_ver = create_varint(772);
 	let mut string_size = create_varint(subdomain_bytes.len().try_into().unwrap());
@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 				break;
 			},
 			Ok(n) => {
+				println!("wrote {}", n);
 				continue;
 			}
 			Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
