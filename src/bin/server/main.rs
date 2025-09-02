@@ -1,11 +1,11 @@
-use std::{collections::{HashMap, VecDeque}, error::Error, fs::File, io::{self, IoSlice, Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr}, ops::SubAssign, sync::Arc, time::Duration};
+use std::{collections::{HashMap, VecDeque}, error::Error, fs::{self, File}, io::{self, IoSlice, Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr}, ops::SubAssign, sync::Arc, time::Duration};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures::{future::poll_fn, select, SinkExt};
 use mc_proxy_lib::{packet::{self, create_packet, create_varint, get_packet, read_string, read_varint}, tunnel::{quic_to_tcp, tcp_to_quic}};
-use quinn::{Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt};
+use quinn::{crypto::CryptoError, Chunk, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt};
 use rcgen::CertifiedKey;
-use rustls::{pki_types::{CertificateDer, PrivatePkcs8KeyDer}, server};
+use rustls::{pki_types::{pem::PemObject, CertificateDer, PrivatePkcs8KeyDer}, server};
 use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpStream}, sync::{mpsc::{self, Receiver}, Mutex, RwLock}, time::sleep};
 
 
@@ -21,6 +21,20 @@ fn save_cert_to_file(cert:&String, private_key:&String) -> std::io::Result<()>{
     let mut file_pk = File::create("server.pem")?;
     file_pk.write_all(private_key.as_bytes())?;
     Ok(())
+}
+
+fn load_cert_from_file() -> Result<(CertificateDer<'static>, PrivatePkcs8KeyDer<'static>), ()>{
+    let cert_der_res =  CertificateDer::from_pem_file("server.crt");
+    let key_res = PrivatePkcs8KeyDer::from_pem_file("server.pem");
+    if cert_der_res.is_err() || key_res.is_err(){
+        return Err(());
+    } else {
+        let cert = fs::read_to_string("server.crt").unwrap();
+        let key = fs::read_to_string("server.pem").unwrap();
+        println!("{}", cert);
+        println!("{}", key);
+        return Ok((cert_der_res.unwrap(), key_res.unwrap()));
+    }
 }
 
 fn generate_self_signed_cert()
@@ -154,8 +168,16 @@ async fn setup_tcp_server(connections:Arc<RwLock<HashMap<String, Connection>>>){
 }
 
 async fn setup_quic_server(connections:Arc<RwLock<HashMap<String, Connection>>>) -> Result<(), Box<dyn Error>>{
-    let certs = generate_self_signed_cert().unwrap();
-	let mut server_config = quinn::ServerConfig::with_single_cert(vec![certs.0.clone()], certs.1.into()).unwrap();
+    let loaded_certs:(CertificateDer, PrivatePkcs8KeyDer);
+    if let Ok(certs) = load_cert_from_file() {
+        println!("loaded from file");
+        loaded_certs = certs;
+    } else {
+        let certs = generate_self_signed_cert().unwrap();
+        loaded_certs = certs;
+    }
+    
+	let mut server_config = quinn::ServerConfig::with_single_cert(vec![loaded_certs.0.clone()], loaded_certs.1.into()).unwrap();
     let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
     transport_config.max_concurrent_bidi_streams(255_u8.into());
 	let endpoint = Endpoint::server(server_config, SERVER_ADDR)?;
