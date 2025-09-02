@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use bytes::BytesMut;
-use tokio::{io, net::TcpStream};
+use tokio::{io, net::TcpStream, task::yield_now};
 
 
 async fn handle_connection(stream:TcpStream)-> Result<(), Box<dyn Error>>{
@@ -15,6 +15,7 @@ async fn handle_connection(stream:TcpStream)-> Result<(), Box<dyn Error>>{
 			},
 			Ok(n) => {
 				// continue;
+				yield_now().await;
 			}
 			Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
 				println!("would block");
